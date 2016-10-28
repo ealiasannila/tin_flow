@@ -28,15 +28,21 @@ public:
     Tin(const Tin& orig);
     virtual ~Tin();
     void addVertex(double x, double y, double z);
-    void connectTriangles(unsigned int t1, unsigned int t2);
+    void addTriangle(Vertex* v1, Vertex* v2, Vertex* v3);
     void addTriangle(unsigned int i1, unsigned int i2, unsigned int i3);
+    void swapTriangle(Triangle* t);
     void delineateStreams(SortedVector<std::pair<Vertex*, Vertex*>>* streams);
     void travelUpstream(Vertex* v, std::vector<Vertex*>* stack, SortedVector<std::pair<Vertex*, Vertex*>>* streams);
     void locateSinks(std::vector<Vertex*>* stack);
     std::vector<Vertex*> getFaceAscentDirections();
-    void steepestPath(Vertex* s, Vertex* c1, Vertex* c2);
-    int getCurrentIndex(Triangle* t, Vertex* s);
-    
+    std::vector<std::vector<Vertex*>> steepestPathFromStream(Vertex* s, std::vector<Vertex*> splitters);
+    Vertex* travelUp(Vertex* s, Vertex* cl, Vertex* cr);
+    int getVertexIndex(Triangle* t, Vertex* s);
+    int getTriangleIndex(Triangle* t, Vertex* s);
+    std::pair<Vertex*,Triangle*> locateOpposite(Vertex* l, Vertex* r, Vertex* s);
+    Vertex* fixTriangles(Triangle* t, Vertex* s, Vertex* l, Vertex* r,std::array<double,3> n);
+    void adjustTriangle(Triangle* t, Vertex* o, Vertex* n);
+    void newTriangle(Vertex* v, Vertex* n, Vertex* o,Triangle* ot, int orient);
 };
 
 #endif /* TIN_H */

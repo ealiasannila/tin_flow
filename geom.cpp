@@ -20,6 +20,7 @@ using namespace std;
 Triangle::Triangle(Vertex* v1, Vertex* v2, Vertex* v3) {
     int o = orient(v1, v2, v3);
     if (o == 0) {
+        cout<<v1<<" "<<v2<<" "<<v3<<endl;
         cout << "COLINEAR TRIANGLE!\n";
         exit(1);
     } else if (o == -1) {
@@ -42,9 +43,7 @@ Triangle::Triangle(const Triangle& orig) {
 Triangle::~Triangle() {
 }
 
-void Triangle::addNeighbour(Triangle* t) {
-    this->neighbours.push_back(t);
-}
+
 
 Vertex::Vertex(double x, double y, double z, unsigned int i) {
     this->x = x;

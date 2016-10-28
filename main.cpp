@@ -135,20 +135,55 @@ bool write_streams(std::string path, SortedVector<std::pair<Vertex*, Vertex*>> s
     return true;
 }
 
+bool write_steepestPath(string path, vector<vector<Vertex*>> paths) {
+    ofstream output(path.c_str());
+    output << fixed << setprecision(2);
+    if (output.is_open()) {
+        output << "mtllib tin.mtl\n";
+        map <Vertex*, unsigned int>indexes;
+        unsigned int ind = 1;
+        for (vector<Vertex*> p : paths) {
+            for (int i = 0; i < p.size(); i++) {
+                output << "v " << p[i]->x << " " << p[i]->y << " " << p[i]->z << endl;
+                indexes.insert(make_pair(p[i], ind));
+                ind++;
+            }
+        }
+        for (vector<Vertex*> p : paths) {
+            for (int i = 0; i < p.size() - 1; i++) {
+                output << "l " << indexes[p[i]] << " " << indexes[p[i + 1]] << endl;
+            }
+        }
+
+        output.close();
+    } else cout << "Unable to open file";
+    return true;
+}
+
 int main(int argc, char** argv) {
-    
- 
+
+
     cout << "Hello\n";
     Tin tin;
     parse_obj("/home/elias/Documents/tin/small.obj", &tin, 0, 2, 1);
     write_tin("/home/elias/Documents/tin/small2.obj", &tin);
     write_ascents("/home/elias/Documents/tin/ascents.obj", tin.getFaceAscentDirections());
-
-    vector<Vertex*> sinks;
-    tin.locateSinks(&sinks);
-    write_sinks("/home/elias/Documents/tin/sinks.obj", sinks);
     SortedVector<std::pair < Vertex*, Vertex*>> streams;
     tin.delineateStreams(&streams);
+
+    vector<pair < Vertex*, Vertex*>>::iterator begin = streams.begin();
+    vector < vector<Vertex*>> paths;
+    for (pair<Vertex*, Vertex*> pair : streams) {
+        if (pair.second != 0) {
+           vector < vector<Vertex*>> some_paths = tin.steepestPathFromStream(pair.first, vector<Vertex*>{pair.second});
+           for(vector<Vertex*> p: some_paths){
+               paths.push_back(p);
+           }
+        }
+    }
+    write_steepestPath("/home/elias/Documents/tin/steepest.obj",paths);
+    return 0;
+
     for (pair<Vertex*, Vertex*> p : streams) {
         cout << p.first->index << "->";
         if (p.second != 0) {
