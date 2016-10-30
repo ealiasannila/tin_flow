@@ -20,7 +20,8 @@
 #include<map>
 #include  <vector>
 #include "Tin.h"
-#include "sorted_vector.h"
+#include <set>
+#include <ctime>
 using namespace std;
 
 /*
@@ -62,16 +63,48 @@ bool parse_obj(std::string path, Tin* tin, int x, int y, int z) {
 
 }
 
+void write_materials(std::string path, int n) {
+    ofstream output(path.c_str());
+    output << fixed << setprecision(2);
+    if (output.is_open()) {
+        output << "newmtl mnull" << endl;
+        output << "Ka " << 1 << " " << 0 << " " << 0 << endl;
+        output << "Kd " << 1 << " " << 0 << " " << 0 << endl;
+        output << "Ks " << 1 << " " << 0 << " " << 0 << endl;
+        output << "Tf " << 1 << " " << 0 << " " << 0 << endl;
+
+        for (int i = 0; i < n; i++) {
+            double r = ((double) rand() / (double) RAND_MAX);
+            double g = ((double) rand() / (double) RAND_MAX);
+            double b = ((double) rand() / (double) RAND_MAX);
+            output << "newmtl m" << i << endl;
+            output << "Ka " << r << " " << g << " " << b << endl;
+            output << "Kd " << r << " " << g << " " << b << endl;
+            output << "Ks " << r << " " << g << " " << b << endl;
+            output << "Tf " << r << " " << g << " " << b << endl;
+        }
+        output.close();
+    } else cout << "Unable to open file";
+}
+
 bool write_tin(std::string path, Tin* tin) {
+    map<Vertex*, int> colors;
     ofstream output(path.c_str());
     output << fixed << setprecision(2);
     if (output.is_open()) {
         output << "mtllib tin.mtl\n";
         for (int i = 0; i < tin->vertices.size(); i++) {
             output << "v " << tin->vertices[i]->x << " " << tin->vertices[i]->y << " " << tin->vertices[i]->z << endl;
+            colors.insert(make_pair(tin->vertices[i], i));
         }
-        output << "g ground\nusemtl green\n";
         for (int i = 0; i < tin->triangles.size(); i++) {
+            if (tin->triangles[i]->drainsTo == 0) {
+                cout << "NO DRAIN" << endl;
+                output << "usemtl mnull" << endl;
+            } else {
+                output << "usemtl m" << colors[tin->triangles[i]->drainsTo] << endl;
+
+            }
             output << "f " << tin->triangles[i]->vertices[0]->index + 1 << " " << tin->triangles[i]->vertices[1]->index + 1 << " " << tin->triangles[i]->vertices[2]->index + 1 << endl;
         }
 
@@ -113,21 +146,23 @@ bool write_ascents(string path, vector<Vertex*> ascents) {
     return true;
 }
 
-bool write_streams(std::string path, SortedVector<std::pair<Vertex*, Vertex*>> streams) {
+bool write_streams(std::string path, set<Vertex*> streams) {
     ofstream output(path.c_str());
     output << fixed << setprecision(2);
     if (output.is_open()) {
         output << "mtllib tin.mtl\n";
         map<Vertex*, int> indexes;
         int i = 1;
-        for (pair<Vertex*, Vertex*>p : streams) {
-            output << "v " << p.first->x << " " << p.first->y << " " << p.first->z << endl;
-            indexes.insert(make_pair(p.first, i));
+        for (Vertex* v : streams) {
+            output << "v " << v->x << " " << v->y << " " << v->z << endl;
+            indexes.insert(make_pair(v, i));
             i++;
         }
-        for (pair<Vertex*, Vertex*>p : streams) {
-            if (p.second != 0) {
-                output << "l " << indexes[p.first] << " " << indexes[p.second] << endl;
+        for (Vertex* v : streams) {
+            if (v->upstream.size() != 0) {
+                for (Vertex* u : v->upstream) {
+                    output << "l " << indexes[v] << " " << indexes[u] << endl;
+                }
             }
         }
         output.close();
@@ -161,38 +196,50 @@ bool write_steepestPath(string path, vector<vector<Vertex*>> paths) {
 }
 
 int main(int argc, char** argv) {
-
-
+    srand(time(NULL));
     cout << "Hello\n";
     Tin tin;
     parse_obj("/home/elias/Documents/tin/small.obj", &tin, 0, 2, 1);
-    write_tin("/home/elias/Documents/tin/small2.obj", &tin);
-    write_ascents("/home/elias/Documents/tin/ascents.obj", tin.getFaceAscentDirections());
-    SortedVector<std::pair < Vertex*, Vertex*>> streams;
-    tin.delineateStreams(&streams);
-
-    vector<pair < Vertex*, Vertex*>>::iterator begin = streams.begin();
-    vector < vector<Vertex*>> paths;
-    for (pair<Vertex*, Vertex*> pair : streams) {
-        if (pair.second != 0) {
-           vector < vector<Vertex*>> some_paths = tin.steepestPathFromStream(pair.first, vector<Vertex*>{pair.second});
-           for(vector<Vertex*> p: some_paths){
-               paths.push_back(p);
-           }
+    set<Vertex*> streams;
+    //tin.delineateStreams(&streams);
+    tin.exhaustive(&streams);
+    cout << streams.size();
+    cout << "Streams:" << endl;
+    vector < vector < Vertex*>> paths;
+    for (Vertex* v : streams) {
+        cout << v->index << ": " << v->x << "," << v->y << endl;
+        if (v->upstream.size() != 0) {
+            vector<Vertex*> splitters;
+            splitters.reserve(v->downstream.size() + v->upstream.size()); // preallocate memory
+            splitters.insert(splitters.end(), v->downstream.begin(), v->downstream.end());
+            splitters.insert(splitters.end(), v->upstream.begin(), v->upstream.end());
+            sortSplitters(&splitters, v);
+            vector<vector < Vertex*>> some_paths = tin.steepestPathFromStream(v, splitters);
+            for (vector<Vertex*> p : some_paths) {
+                paths.push_back(p);
+            }
         }
     }
-    write_steepestPath("/home/elias/Documents/tin/steepest.obj",paths);
-    return 0;
 
-    for (pair<Vertex*, Vertex*> p : streams) {
-        cout << p.first->index << "->";
-        if (p.second != 0) {
-            cout << p.second->index << endl;
-        }
-        cout << 0 << endl;
-    }
+    tin.colorTriangles();
+
+
+    write_materials("/home/elias/Documents/tin/tin.mtl", tin.vertices.size());
     write_streams("/home/elias/Documents/tin/streams.obj", streams);
+    write_tin("/home/elias/Documents/tin/small2.obj", &tin);
 
+    write_steepestPath("/home/elias/Documents/tin/steepest.obj", paths);
+
+    int out = system("blender --python /home/elias/Documents/tin/obj_loader.py "
+            "/home/elias/Documents/tin/streams.obj "
+            "/home/elias/Documents/tin/small2.obj "
+            "/home/elias/Documents/tin/steepest.obj ");
+
+
+
+
+
+    //       system("g3dviewer /home/elias/Documents/tin/small2.obj");
     return 0;
 }
 

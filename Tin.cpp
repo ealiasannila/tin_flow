@@ -13,7 +13,6 @@
 
 #include "Tin.h"
 #include "geom.h"
-#include "sorted_vector.h"
 
 #include <iostream>
 #include <map>
@@ -76,12 +75,51 @@ void Tin::locateSinks(vector<Vertex*>* vec) {
     }
 }
 
-void Tin::delineateStreams(SortedVector<std::pair<Vertex*, Vertex*>>*streams) {
+void Tin::exhaustive(std::set<Vertex*>* streams) {
+    for (Triangle* t : this->triangles) {
+        array<double, 3> sd = steepestDescent(t);
+        for (int i = 0; i < 3; i++) {
+            Vertex* v1 = t->vertices[i];
+            Vertex* v2 = t->vertices[(i + 1) % 3];
+            Vertex* v3 = t->vertices[(i + 2) % 3];
+            Vertex sdv = Vertex{v2->x + sd[0], v2->y + sd[1], v2->z + sd[2], 0};
+            if(find(v1->downstream.begin(), v1->downstream.end(),v2)!=v1->downstream.end() or
+                    find(v2->downstream.begin(), v2->downstream.end(), v1) != v2->downstream.end()){
+                continue;
+            }
+            
+            if (orient(v1, v2, &sdv) == 1) {
+
+                Triangle* ot = this->locateOpposite(v2, v1, v3).second;
+                if (ot != 0) {
+                    array<double, 3> sdo = steepestDescent(ot);
+                    Vertex sdvo = Vertex{v2->x + sdo[0], v2->y + sdo[1], v2->z + sdo[2], 0};
+                    if (orient(v1, v2, &sdvo) == -1) {
+                        if (v1->z > v2->z) {
+                            v1->downstream.push_back(v2);
+                            v2->upstream.push_back(v1);
+                        } else if (v2->z > v1->z) {
+                            v2->downstream.push_back(v1);
+                            v1->upstream.push_back(v2);
+                        }
+                        streams->insert(v1);
+                        streams->insert(v2);
+                    }
+                }
+            }
+
+
+
+        }
+    }
+}
+
+void Tin::delineateStreams(set<Vertex*>*streams) {
     vector<Vertex*> stack;
     this->locateSinks(&stack);
-    Vertex* nv = 0;
     for (Vertex* v : stack) {
-        streams->insert(make_pair(v, nv));
+        cout << "iserting" << v->index << endl;
+        cout << streams->insert(v).second;
     }
     cout << stack.size() << " sink points\n";
     while (!stack.empty()) {
@@ -89,30 +127,6 @@ void Tin::delineateStreams(SortedVector<std::pair<Vertex*, Vertex*>>*streams) {
         stack.pop_back();
         travelUpstream(v, &stack, streams);
     }
-}
-
-vector<Vertex*> Tin::getFaceAscentDirections() {
-    vector<Vertex*> v;
-    unsigned int i = 1;
-    for (Triangle* t : this->triangles) {
-        Vertex* p = t->vertices[0];
-        Vertex* q = t->vertices[1];
-        Vertex* r = t->vertices[2];
-        double x = (p->x + q->x + r->x) / 3;
-        double y = (p->y + q->y + r->y) / 3;
-        double z = (p->z + q->z + r->z) / 3;
-        array<double, 3> d = steepestAscent(t);
-
-        Vertex* v1 = new Vertex{x, y, z, i};
-        Vertex* v2 = new Vertex{d[0]*7 + x, d[1]*7 + y, d[2]*7 + z, i + 1};
-        v.push_back(v1);
-        v.push_back(v2);
-        i += 2;
-
-
-    }
-
-    return v;
 }
 
 int Tin::getVertexIndex(Triangle* t, Vertex* s) {
@@ -135,20 +149,38 @@ int Tin::getTriangleIndex(Triangle* t, Vertex* s) {
     return i;
 }
 
+void Tin::streamEnd(Vertex* s, Vertex* cl, Vertex* cr, vector<vector < Vertex*>>*steepest) {
+    Vertex* next = 0;
+    steepest->push_back(vector<Vertex*>{s});
+
+
+    while (true) {
+        if (next == 0) {
+            next = travelUp(s, cl, cr);
+        } else {
+            next = travelUp(next, 0, 0);
+        }
+        if (next == 0) {
+            break;
+        }
+        steepest->back().push_back(next);
+    }
+}
+
 vector<vector<Vertex*>> Tin::steepestPathFromStream(Vertex* s, vector<Vertex*> splitters) {
     vector<vector < Vertex*>> steepest;
 
+    if (splitters.size() == 1) {
+        streamEnd(s, s, splitters[0], &steepest);
+        streamEnd(s, splitters[0], s, &steepest);
+        return steepest;
+    }
     for (unsigned int i = 0; i < splitters.size(); i++) {
         steepest.push_back(vector<Vertex*>{s});
         Vertex* next = 0;
         while (true) {
             if (next == 0) {
-                if (splitters.size() == 1) {
-                    next = travelUp(s, s, splitters[i]);
-
-                } else {
-                    next = travelUp(s, splitters[i], splitters[(i + 1) % splitters.size()]);
-                }
+                next = travelUp(s, splitters[i], splitters[(i + 1) % splitters.size()]);
             } else {
                 next = travelUp(next, 0, 0);
             }
@@ -204,7 +236,6 @@ Vertex* Tin::fixTriangles(Triangle* t, Vertex* s, Vertex* l, Vertex* r, array<do
     //Triangle 1
     this->adjustTriangle(t, r, nv);
     //Triangle 2
-    cout << "sofar\n";
     this->newTriangle(s, nv, r, t, -1);
 
     pair<Vertex*, Triangle*> lo = this->locateOpposite(l, r, s);
@@ -225,10 +256,8 @@ Vertex* Tin::fixTriangles(Triangle* t, Vertex* s, Vertex* l, Vertex* r, array<do
 Vertex* Tin::travelUp(Vertex* s, Vertex* cl, Vertex* cr) {
     double maxAscent = 0;
     Vertex* next = 0;
-    cout << s << endl;
-    cout << "triangles: " << s->triangles.size() << endl;
+
     for (Triangle* t : s->triangles) {
-        cout << "t" << endl;
         int i = this->getVertexIndex(t, s);
         Vertex* l = t->vertices[(i + 2) % 3];
         Vertex* r = t->vertices[(i + 1) % 3];
@@ -244,19 +273,10 @@ Vertex* Tin::travelUp(Vertex* s, Vertex* cl, Vertex* cr) {
         int lo = orient(s, &sv, l);
         int ro = orient(s, &sv, r);
 
-        cout<<s->index<<" "<<r->index<<" "<<l->index<<endl;
-        cout<<s->x<<" "<<s->y<<endl;
-        cout<<l->x<<" "<<l->y<<endl;
-        cout<<r->x<<" "<<r->y<<endl;
-        cout<<sv.x<<" "<<sv.y<<endl;
-        cout<<lo<<" "<<ro<<endl;
-        cout<<endl;
         if (lo == -1 and ro == 1) {
             rateOfAscent = steepDir[2] / sqrt(steepDir[0] * steepDir[0] + steepDir[1] * steepDir[1]);
             if (maxAscent < rateOfAscent) {
-                array<double, 3> nextCoords = intersectAscentAndTri(s, steepDir[0], steepDir[1], steepDir[2], l, r);
-                cout<<r->x<<" "<<r->y<<" "<<r->z<<endl;
-                cout<<nextCoords[0]<<" "<<nextCoords[1]<<" "<<nextCoords[2]<<endl;
+                array<double, 3> nextCoords = intersectRayPlane(s, steepDir[0], steepDir[1], steepDir[2], l, r);
                 next = fixTriangles(t, s, l, r, nextCoords);
                 maxAscent = rateOfAscent;
             }
@@ -274,11 +294,10 @@ Vertex* Tin::travelUp(Vertex* s, Vertex* cl, Vertex* cr) {
             }
         }
     }
-    cout << "Returning\n";
     return next;
 }
 
-void Tin::travelUpstream(Vertex* s, vector<Vertex*>* stack, SortedVector<std::pair<Vertex*, Vertex*>>*streams) {
+void Tin::travelUpstream(Vertex* s, vector<Vertex*>* stack, set<Vertex*>*streams) {
     set<Vertex*> candidates;
     for (Triangle* t : s->triangles) {
         int i = this->getVertexIndex(t, s);
@@ -294,17 +313,85 @@ void Tin::travelUpstream(Vertex* s, vector<Vertex*>* stack, SortedVector<std::pa
         int ro = orient(s, &sv, r);
         if (lo == -1) {
             if (!candidates.insert(l).second) { //If other side of left vertex also drains to stream
-                if (streams->insert(make_pair(l, s)).second) { //if upstream of left vertex is not already handled by other stream
+                l->downstream.push_back(s);
+                s->upstream.push_back(l);
+                if (streams->insert(l).second) { //if upstream of left vertex is not already handled by other stream
                     stack->push_back(l);
                 }
             }
         }
         if (ro == 1) {
             if (!candidates.insert(r).second) {
-                if (streams->insert(make_pair(r, s)).second) {
+                l->downstream.push_back(s);
+                s->upstream.push_back(r);
+                if (streams->insert(r).second) {
                     stack->push_back(r);
                 }
             }
         }
+    }
+}
+
+Vertex* Tin::travelDown(array<double, 3> v, Triangle* t, Vertex* li, Vertex* ri) {
+
+    array<double, 3> sd = steepestDescent(t);
+    array<double, 3> sdv{v[0] + sd[0], v[1] + sd[1], v[2] + sd[2]};
+
+    for (int i = 0; i < t->vertices.size(); i++) {
+        Vertex* l = t->vertices[(i + 1) % 3];
+        Vertex* r = t->vertices[i];
+
+
+        int ro = orient(v, sdv,{r->x, r->y, r->z});
+        int lo = orient(v, sdv,{l->x, l->y, l->z});
+
+        if (ro == 0) {
+            return r;
+        }
+        if (lo == 0) {
+
+            return l;
+        }
+
+        if (ro == 1 and lo == -1) {
+            if (l == ri and r == li) {
+                if (l->z > r->z) {
+                    return r;
+                } else {
+                    return l;
+                }
+            }
+            //cout << "edge found" << endl;
+
+            if (find(l->downstream.begin(), l->downstream.end(), r) != l->downstream.end()) {
+                return r;
+            } else if (find(r->downstream.begin(), r->downstream.end(), l) != r->downstream.end()) {
+                return l;
+            }
+            std::array<double, 3> intersect = intersectRayPlane(v, sd[0], sd[1], sd[2], l, r);
+            pair<Vertex*, Triangle*> ot = locateOpposite(l, r, t->vertices[(i + 2) % 3]);
+            if (ot.second != 0) {
+                cout << "T: \n";
+                for (Vertex* v : t->vertices) {
+                    cout << v->index << " ";
+                }
+                cout << "\nL: " << l->index << " R: " << r->index << endl;
+                cout << "\nOT: \n";
+                for (Vertex* v : ot.second->vertices) {
+                    cout << v->index << " ";
+                }
+                cout << endl;
+                cout << t->vertices[(i + 2) % 3]->index << endl;
+                cout << ot.first->index << endl;
+                cout << endl;
+                return travelDown(intersect, ot.second, l, r);
+            }
+        }
+    }
+}
+
+void Tin::colorTriangles() {
+    for (Triangle* t : this->triangles) {
+        t->drainsTo = travelDown(t->centroid(), t, 0, 0);
     }
 }
