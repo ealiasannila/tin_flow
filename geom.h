@@ -18,7 +18,7 @@
 #include <iostream>
 #include <algorithm>
 struct Vertex;
-const double EPSILON = 0.01;
+const double EPSILON = 0.001;
 
 struct Triangle {
 public:
@@ -160,6 +160,7 @@ inline std::array<double, 3> intersectRayPlane(std::array<double, 3> s, double u
 inline std::array<double, 3> intersectRayPlane(Vertex* s, double ui, double uj, double uk, Vertex* l, Vertex* r) {
     return intersectRayPlane({s->x,s->y,s->z},ui,uj,uk,l,r);
 }
+
 
 #endif /* TRIANGLE_H */
 

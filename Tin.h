@@ -35,13 +35,16 @@ public:
     int getTriangleIndex(Triangle* t, Vertex* s);
     
     void exhaustive(std::set<Vertex*>* streams);
+    bool isSink(Vertex*);
+    bool isPeak(Vertex*);
+    void connectDisjointStreams(std::set<Vertex*>*streams);
     
     void delineateStreams(std::set<Vertex*>* streams);
     
     void travelUpstream(Vertex* v, std::vector<Vertex*>* stack, std::set<Vertex*>* streams);
     void locateSinks(std::vector<Vertex*>* stack);
     
-    Vertex* travelDown(std::array<double, 3> v, Triangle* t,Vertex* li, Vertex* ri);
+    Vertex* travelDown(std::array<double, 3> v, Triangle* t);
     void colorTriangle(Triangle* t);
     void colorTriangles();
     

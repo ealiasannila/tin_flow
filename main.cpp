@@ -201,8 +201,9 @@ int main(int argc, char** argv) {
     Tin tin;
     parse_obj("/home/elias/Documents/tin/small.obj", &tin, 0, 2, 1);
     set<Vertex*> streams;
-    //tin.delineateStreams(&streams);
     tin.exhaustive(&streams);
+    tin.connectDisjointStreams(&streams);
+
     cout << streams.size();
     cout << "Streams:" << endl;
     vector < vector < Vertex*>> paths;
@@ -223,17 +224,15 @@ int main(int argc, char** argv) {
 
     tin.colorTriangles();
 
-
-    write_materials("/home/elias/Documents/tin/tin.mtl", tin.vertices.size());
     write_streams("/home/elias/Documents/tin/streams.obj", streams);
+    write_materials("/home/elias/Documents/tin/tin.mtl", tin.vertices.size());
     write_tin("/home/elias/Documents/tin/small2.obj", &tin);
-
     write_steepestPath("/home/elias/Documents/tin/steepest.obj", paths);
-
     int out = system("blender --python /home/elias/Documents/tin/obj_loader.py "
             "/home/elias/Documents/tin/streams.obj "
             "/home/elias/Documents/tin/small2.obj "
             "/home/elias/Documents/tin/steepest.obj ");
+
 
 
 

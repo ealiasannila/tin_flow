@@ -20,7 +20,9 @@ using namespace std;
 Triangle::Triangle(Vertex* v1, Vertex* v2, Vertex* v3) {
     int o = orient(v1, v2, v3);
     if (o == 0) {
-        cout << v1 << " " << v2 << " " << v3 << endl;
+        cout << v1->index << " " << v2->index << " "<<v3->index << endl;
+        cout << v1->x << " " << v3->x << " " << v3->x << endl;
+        cout << v1->y << " " << v3->y << " " << v3->y << endl;
         cout << "COLINEAR TRIANGLE!\n";
         exit(1);
     } else if (o == -1) {
@@ -37,7 +39,7 @@ Triangle::Triangle(Vertex* v1, Vertex* v2, Vertex* v3) {
 }
 
 std::array<double, 3> Triangle::centroid() {
-    double x=0, y=0, z = 0;
+    double x = 0, y = 0, z = 0;
     for (int i = 0; i < 3; i++) {
         x += this->vertices[i]->x;
         y += this->vertices[i]->y;
